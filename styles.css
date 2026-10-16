@@ -1,0 +1,113 @@
+@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css");
+
+.uvt-mic-trigger i,
+.uvt-toast i,
+.fa-solid,
+.fa-brands,
+.fa-regular {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 900 !important;
+  font-style: normal !important;
+  font-variant: normal !important;
+  text-rendering: auto !important;
+  line-height: 1 !important;
+  display: inline-block !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.uvt-mic-trigger {
+  position: absolute;
+  z-index: 2147483647;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 50%;
+  background: #1e1f24;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #c4c7c5;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  user-select: none;
+  font-size: 11px;
+}
+
+.uvt-mic-trigger:hover {
+  transform: scale(1.1);
+  color: #ffffff;
+  background: #2b2d33;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.uvt-mic-trigger.uvt-recording {
+  background: #ea4335 !important;
+  color: #ffffff !important;
+  border-color: #ff7669 !important;
+  animation: uvt-pulse 1.3s infinite ease-in-out;
+}
+
+@keyframes uvt-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(234, 67, 53, 0);
+    transform: scale(1.12);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(234, 67, 53, 0);
+    transform: scale(1);
+  }
+}
+
+.uvt-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  bottom: auto;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(24, 25, 29, 0.96);
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(-20px) scale(0.96);
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.uvt-toast.uvt-show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.uvt-toast i {
+  font-size: 15px;
+}
+
+.uvt-toast-info i {
+  color: #4285f4 !important;
+}
+
+.uvt-toast-success i {
+  color: #34a853 !important;
+}
+
+.uvt-toast-error i {
+  color: #ea4335 !important;
+}
