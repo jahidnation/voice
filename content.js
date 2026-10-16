@@ -13,6 +13,7 @@
   let toastTimer = null;
   let currentLang = localStorage.getItem("uvt_lang") || "bn-BD";
   let currentMode = localStorage.getItem("uvt_mode") || "normal";
+  const translationCache = new Map();
 
   const toastElement = document.createElement("div");
   toastElement.className = "uvt-toast";
@@ -29,19 +30,62 @@
   };
 
   const translateText = async (text, fromLang, toLang) => {
-    if (!text) return text;
-    try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&q=${encodeURIComponent(text)}`;
-      const response = await fetch(url);
-      if (!response.ok) return text;
-      const data = await response.json();
-      if (data && data[0]) {
-        return data[0].map((item) => item[0]).filter(Boolean).join("");
-      }
-      return text;
-    } catch {
-      return text;
+    if (!text || !text.trim()) return text;
+    const cleanText = text.trim();
+    const cacheKey = `${fromLang}_${toLang}_${cleanText.toLowerCase()}`;
+    if (translationCache.has(cacheKey)) {
+      return translationCache.get(cacheKey);
     }
+
+    try {
+      const u1 = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(cleanText)}`;
+      const r1 = await fetch(u1);
+      if (r1.ok) {
+        const d1 = await r1.json();
+        let res = "";
+        if (d1.sentences && Array.isArray(d1.sentences)) {
+          res = d1.sentences.map((s) => s.trans || "").join(" ").trim();
+        } else if (Array.isArray(d1)) {
+          res = typeof d1[0] === "string" ? d1.join(" ") : d1[0].map((i) => i[0]).filter(Boolean).join(" ");
+        }
+        if (res && res !== cleanText) {
+          translationCache.set(cacheKey, res);
+          return res;
+        }
+      }
+    } catch {}
+
+    try {
+      const u2 = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&q=${encodeURIComponent(cleanText)}`;
+      const r2 = await fetch(u2);
+      if (r2.ok) {
+        const d2 = await r2.json();
+        if (d2 && d2[0]) {
+          const res = d2[0].map((item) => item[0]).filter(Boolean).join("").trim();
+          if (res) {
+            translationCache.set(cacheKey, res);
+            return res;
+          }
+        }
+      }
+    } catch {}
+
+    try {
+      const u3 = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=${fromLang}|${toLang}`;
+      const r3 = await fetch(u3);
+      if (r3.ok) {
+        const d3 = await r3.json();
+        if (d3 && d3.responseData && d3.responseData.translatedText) {
+          const res = d3.responseData.translatedText.trim();
+          if (res && !res.toLowerCase().includes("mymemory")) {
+            translationCache.set(cacheKey, res);
+            return res;
+          }
+        }
+      }
+    } catch {}
+
+    return text;
   };
 
   const formatBanglaPunctuation = (rawText) => {
