@@ -13,6 +13,7 @@
   let toastTimer = null;
   let currentLang = localStorage.getItem("uvt_lang") || "bn-BD";
   let currentMode = localStorage.getItem("uvt_mode") || "normal";
+  let resizeObserver = null;
   const translationCache = new Map();
 
   const toastElement = document.createElement("div");
@@ -27,6 +28,62 @@
     toastTimer = setTimeout(() => {
       toastElement.classList.remove("uvt-show");
     }, 2800);
+  };
+
+  const logoUrl = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL
+    ? chrome.runtime.getURL("logo.png")
+    : "logo.png";
+
+  const logoButton = document.createElement("button");
+  logoButton.type = "button";
+  logoButton.className = "uvt-logo-trigger";
+  logoButton.title = "Voice Type (Click or Alt + V)";
+  logoButton.style.cssText = "position:fixed;z-index:2147483647;display:none;width:22px;height:22px;min-width:22px;border-radius:50%;background:#1e1f24;border:1px solid rgba(255,255,255,0.2);box-shadow:0 2px 6px rgba(0,0,0,0.3);cursor:pointer;padding:1px;align-items:center;justify-content:center;transition:transform 0.15s ease,box-shadow 0.2s ease,border-color 0.2s ease;user-select:none;outline:none;";
+
+  const logoImg = document.createElement("img");
+  logoImg.src = logoUrl;
+  logoImg.alt = "Voice";
+  logoImg.style.cssText = "width:100%;height:100%;object-fit:contain;border-radius:50%;display:block;pointer-events:none;";
+  logoButton.appendChild(logoImg);
+  document.body.appendChild(logoButton);
+
+  const positionLogo = (target) => {
+    if (!target || !document.contains(target)) {
+      logoButton.style.display = "none";
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0 || rect.bottom < 0 || rect.top > window.innerHeight) {
+      logoButton.style.display = "none";
+      return;
+    }
+
+    const btnHeight = 22;
+    const btnWidth = 22;
+    const top = rect.height <= 44
+      ? rect.top + (rect.height - btnHeight) / 2
+      : rect.top + 6;
+
+    let left = rect.right - btnWidth - 6;
+    if (left < rect.left + 4) {
+      left = rect.left + 4;
+    }
+
+    logoButton.style.top = `${Math.round(top)}px`;
+    logoButton.style.left = `${Math.round(left)}px`;
+    logoButton.style.display = "flex";
+  };
+
+  const updateLogoVisual = () => {
+    if (isRecording) {
+      logoButton.style.borderColor = "#ea4335";
+      logoButton.style.boxShadow = "0 0 6px rgba(234,67,53,0.7)";
+      logoButton.style.transform = "scale(1.05)";
+    } else {
+      logoButton.style.borderColor = "rgba(255,255,255,0.2)";
+      logoButton.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+      logoButton.style.transform = "scale(1)";
+    }
   };
 
   const translateText = async (text, fromLang, toLang) => {
@@ -171,6 +228,7 @@
       }
       target.dispatchEvent(new Event("input", { bubbles: true }));
     }
+    positionLogo(target);
   };
 
   const setupRecognition = () => {
@@ -193,6 +251,7 @@
 
     instance.onstart = () => {
       isRecording = true;
+      updateLogoVisual();
       if (currentMode === "bn_to_en") {
         showToast("Listening: বাংলা ➔ English...", "info");
       } else if (currentMode === "en_to_bn") {
@@ -281,6 +340,7 @@
 
   const stopRecording = () => {
     isRecording = false;
+    updateLogoVisual();
     if (recognition) {
       try {
         recognition.stop();
@@ -297,7 +357,13 @@
     }
   };
 
-  document.addEventListener("focusin", (e) => {
+  logoButton.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleRecording();
+  });
+
+  const handleTargetFocus = (e) => {
     const el = e.target;
     if (
       el &&
@@ -305,9 +371,39 @@
         (el.tagName === "INPUT" && !["button", "checkbox", "radio", "submit", "file", "image"].includes(el.type)) ||
         el.isContentEditable)
     ) {
+      if (currentTarget && resizeObserver) {
+        resizeObserver.unobserve(currentTarget);
+      }
       currentTarget = el;
+      positionLogo(el);
+
+      if (window.ResizeObserver) {
+        if (!resizeObserver) {
+          resizeObserver = new ResizeObserver(() => {
+            if (currentTarget) positionLogo(currentTarget);
+          });
+        }
+        resizeObserver.observe(el);
+      }
     }
+  };
+
+  document.addEventListener("focusin", handleTargetFocus, true);
+  document.addEventListener("input", () => {
+    if (currentTarget) positionLogo(currentTarget);
   }, true);
+
+  window.addEventListener("scroll", () => {
+    if (currentTarget && logoButton.style.display !== "none") {
+      positionLogo(currentTarget);
+    }
+  }, { passive: true, capture: true });
+
+  window.addEventListener("resize", () => {
+    if (currentTarget && logoButton.style.display !== "none") {
+      positionLogo(currentTarget);
+    }
+  }, { passive: true });
 
   document.addEventListener("keydown", (e) => {
     if (e.altKey && (e.key === "l" || e.key === "L")) {
@@ -327,6 +423,11 @@
       }
     } else if (e.altKey && (e.key === "v" || e.key === "V")) {
       e.preventDefault();
+      const active = document.activeElement;
+      if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT" || active.isContentEditable)) {
+        currentTarget = active;
+        positionLogo(active);
+      }
       toggleRecording();
     }
   });
