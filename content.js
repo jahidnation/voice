@@ -1,9 +1,10 @@
 (() => {
-  if (!document.querySelector('link[href*="font-awesome"]')) {
+  if (!document.getElementById("uvt-fa-cdn") && !document.querySelector('link[href*="font-awesome"]')) {
     const fontAwesomeLink = document.createElement("link");
+    fontAwesomeLink.id = "uvt-fa-cdn";
     fontAwesomeLink.rel = "stylesheet";
     fontAwesomeLink.href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css";
-    document.head.appendChild(fontAwesomeLink);
+    (document.head || document.documentElement).appendChild(fontAwesomeLink);
   }
 
   const storage = (typeof chrome !== "undefined" && chrome.storage && (chrome.storage.sync || chrome.storage.local)) || null;
@@ -442,7 +443,7 @@
         showToast(`Language: ${currentLang === "bn-BD" ? "Bangla" : "English"}`, "info");
       } else {
         currentMode = currentMode === "bn_to_en" ? "en_to_bn" : "bn_to_en";
-        if (storage) storage.set({ uvt_mode: currentMode });
+        if (storage) storage.set({ uvt_mode: currentMode, uvt_last_trans: currentMode });
         showToast(`Mode: ${currentMode === "bn_to_en" ? "বাংলা ➔ English" : "English ➔ বাংলা"}`, "info");
       }
       if (isRecording) {
@@ -485,10 +486,14 @@
       } else if (request.action === "setLanguage") {
         currentLang = request.lang;
         currentMode = "normal";
+        if (storage) storage.set({ uvt_lang: currentLang, uvt_mode: "normal" });
         showToast(`Language: ${currentLang === "bn-BD" ? "Bangla" : "English"}`, "info");
         sendResponse({ isRecording, currentLang, currentMode, floatingBtnEnabled });
       } else if (request.action === "setMode") {
         currentMode = request.mode;
+        const updateData = { uvt_mode: currentMode };
+        if (currentMode !== "normal") updateData.uvt_last_trans = currentMode;
+        if (storage) storage.set(updateData);
         const modeLabel = currentMode === "bn_to_en" ? "বাংলা ➔ English" : currentMode === "en_to_bn" ? "English ➔ বাংলা" : "Normal";
         showToast(`Mode: ${modeLabel}`, "info");
         if (isRecording) {

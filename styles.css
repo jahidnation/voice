@@ -1,10 +1,7 @@
 @import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css");
 
 .uvt-mic-trigger i,
-.uvt-toast i,
-.fa-solid,
-.fa-brands,
-.fa-regular {
+.uvt-toast i {
   font-family: "Font Awesome 6 Free" !important;
   font-weight: 900 !important;
   font-style: normal !important;
