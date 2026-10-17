@@ -6,15 +6,39 @@
     document.head.appendChild(fontAwesomeLink);
   }
 
+  const storage = (typeof chrome !== "undefined" && chrome.storage && (chrome.storage.sync || chrome.storage.local)) || null;
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
   let recognition = null;
   let isRecording = false;
   let currentTarget = null;
   let toastTimer = null;
-  let currentLang = localStorage.getItem("uvt_lang") || "bn-BD";
-  let currentMode = localStorage.getItem("uvt_mode") || "normal";
+  let currentLang = "bn-BD";
+  let currentMode = "normal";
+  let floatingBtnEnabled = true;
   let resizeObserver = null;
   const translationCache = new Map();
+
+  const syncGlobalSettings = (items) => {
+    if (items.uvt_mode !== undefined) currentMode = items.uvt_mode;
+    if (items.uvt_lang !== undefined) currentLang = items.uvt_lang;
+    if (items.uvt_floating_btn !== undefined) {
+      floatingBtnEnabled = items.uvt_floating_btn;
+      if (!floatingBtnEnabled) {
+        logoButton.style.display = "none";
+      } else if (currentTarget) {
+        positionLogo(currentTarget);
+      }
+    }
+  };
+
+  if (storage) {
+    storage.get({ uvt_mode: "normal", uvt_lang: "bn-BD", uvt_floating_btn: true }, syncGlobalSettings);
+  } else {
+    currentMode = localStorage.getItem("uvt_mode") || "normal";
+    currentLang = localStorage.getItem("uvt_lang") || "bn-BD";
+    floatingBtnEnabled = localStorage.getItem("uvt_floating_btn") !== "false";
+  }
 
   const toastElement = document.createElement("div");
   toastElement.className = "uvt-toast";
@@ -48,6 +72,10 @@
   document.body.appendChild(logoButton);
 
   const positionLogo = (target) => {
+    if (!floatingBtnEnabled) {
+      logoButton.style.display = "none";
+      return;
+    }
     if (!target || !document.contains(target)) {
       logoButton.style.display = "none";
       return;
@@ -410,11 +438,11 @@
       e.preventDefault();
       if (currentMode === "normal") {
         currentLang = currentLang === "bn-BD" ? "en-US" : "bn-BD";
-        localStorage.setItem("uvt_lang", currentLang);
+        if (storage) storage.set({ uvt_lang: currentLang });
         showToast(`Language: ${currentLang === "bn-BD" ? "Bangla" : "English"}`, "info");
       } else {
         currentMode = currentMode === "bn_to_en" ? "en_to_bn" : "bn_to_en";
-        localStorage.setItem("uvt_mode", currentMode);
+        if (storage) storage.set({ uvt_mode: currentMode });
         showToast(`Mode: ${currentMode === "bn_to_en" ? "বাংলা ➔ English" : "English ➔ বাংলা"}`, "info");
       }
       if (isRecording) {
@@ -432,30 +460,52 @@
     }
   });
 
+  if (storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === "sync" || areaName === "local") {
+        if (changes.uvt_mode) currentMode = changes.uvt_mode.newValue;
+        if (changes.uvt_lang) currentLang = changes.uvt_lang.newValue;
+        if (changes.uvt_floating_btn !== undefined) {
+          floatingBtnEnabled = changes.uvt_floating_btn.newValue;
+          if (!floatingBtnEnabled) {
+            logoButton.style.display = "none";
+          } else if (currentTarget) {
+            positionLogo(currentTarget);
+          }
+        }
+      }
+    });
+  }
+
   if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === "toggleRecording") {
         toggleRecording();
-        sendResponse({ isRecording, currentLang, currentMode });
+        sendResponse({ isRecording, currentLang, currentMode, floatingBtnEnabled });
       } else if (request.action === "setLanguage") {
         currentLang = request.lang;
         currentMode = "normal";
-        localStorage.setItem("uvt_lang", currentLang);
-        localStorage.setItem("uvt_mode", currentMode);
         showToast(`Language: ${currentLang === "bn-BD" ? "Bangla" : "English"}`, "info");
-        sendResponse({ isRecording, currentLang, currentMode });
+        sendResponse({ isRecording, currentLang, currentMode, floatingBtnEnabled });
       } else if (request.action === "setMode") {
         currentMode = request.mode;
-        localStorage.setItem("uvt_mode", currentMode);
         const modeLabel = currentMode === "bn_to_en" ? "বাংলা ➔ English" : currentMode === "en_to_bn" ? "English ➔ বাংলা" : "Normal";
         showToast(`Mode: ${modeLabel}`, "info");
         if (isRecording) {
           stopRecording();
           setTimeout(() => startRecording(), 250);
         }
-        sendResponse({ isRecording, currentLang, currentMode });
+        sendResponse({ isRecording, currentLang, currentMode, floatingBtnEnabled });
+      } else if (request.action === "setFloatingBtn") {
+        floatingBtnEnabled = !!request.enabled;
+        if (!floatingBtnEnabled) {
+          logoButton.style.display = "none";
+        } else if (currentTarget) {
+          positionLogo(currentTarget);
+        }
+        sendResponse({ isRecording, currentLang, currentMode, floatingBtnEnabled });
       } else if (request.action === "getStatus") {
-        sendResponse({ isRecording, currentLang, currentMode });
+        sendResponse({ isRecording, currentLang, currentMode, floatingBtnEnabled });
       }
       return true;
     });

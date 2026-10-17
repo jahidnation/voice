@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "Speak to fill any input or textarea instantly without API keys.",
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "storage"
   ],
   "icons": {
     "16": "logo.png",

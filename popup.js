@@ -1,31 +1,70 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const modeNormal = document.getElementById("modeNormal");
-  const modeBnToEn = document.getElementById("modeBnToEn");
-  const modeEnToBn = document.getElementById("modeEnToBn");
+  const tabNormal = document.getElementById("tabNormal");
+  const tabTranslate = document.getElementById("tabTranslate");
   const normalLangGroup = document.getElementById("normalLangGroup");
+  const translateGroup = document.getElementById("translateGroup");
   const btnBangla = document.getElementById("btnBangla");
   const btnEnglish = document.getElementById("btnEnglish");
+  const btnBnToEn = document.getElementById("btnBnToEn");
+  const btnEnToBn = document.getElementById("btnEnToBn");
+  const toggleFloatingBtn = document.getElementById("toggleFloatingBtn");
   const mainMicBtn = document.getElementById("mainMicBtn");
   const statusDot = document.getElementById("statusDot");
   const statusText = document.getElementById("statusText");
   const micActionText = document.getElementById("micActionText");
 
-  const modeButtons = [modeNormal, modeBnToEn, modeEnToBn];
+  const storage = (typeof chrome !== "undefined" && chrome.storage && (chrome.storage.sync || chrome.storage.local)) || null;
 
-  const updateUI = (isRecording, currentLang, currentMode) => {
-    const mode = currentMode || localStorage.getItem("uvt_mode") || "normal";
-    const lang = currentLang || localStorage.getItem("uvt_lang") || "bn-BD";
-
-    modeButtons.forEach((btn) => btn.classList.remove("active"));
-    if (mode === "bn_to_en") {
-      modeBnToEn.classList.add("active");
-      normalLangGroup.classList.add("disabled");
-    } else if (mode === "en_to_bn") {
-      modeEnToBn.classList.add("active");
-      normalLangGroup.classList.add("disabled");
+  const getGlobalSettings = (callback) => {
+    const defaults = { uvt_mode: "normal", uvt_lang: "bn-BD", uvt_floating_btn: true, uvt_last_trans: "bn_to_en" };
+    if (storage) {
+      storage.get(defaults, callback);
     } else {
-      modeNormal.classList.add("active");
-      normalLangGroup.classList.remove("disabled");
+      callback({
+        uvt_mode: localStorage.getItem("uvt_mode") || defaults.uvt_mode,
+        uvt_lang: localStorage.getItem("uvt_lang") || defaults.uvt_lang,
+        uvt_floating_btn: localStorage.getItem("uvt_floating_btn") !== "false",
+        uvt_last_trans: localStorage.getItem("uvt_last_trans") || defaults.uvt_last_trans
+      });
+    }
+  };
+
+  const saveGlobalSettings = (items, callback) => {
+    if (storage) {
+      storage.set(items, callback);
+    } else {
+      Object.entries(items).forEach(([k, v]) => localStorage.setItem(k, String(v)));
+      if (callback) callback();
+    }
+  };
+
+  const updateUI = (isRecording, currentLang, currentMode, floatingEnabled) => {
+    const mode = currentMode || "normal";
+    const lang = currentLang || "bn-BD";
+    const isFloating = floatingEnabled !== undefined ? floatingEnabled : true;
+
+    if (toggleFloatingBtn) {
+      toggleFloatingBtn.checked = isFloating;
+    }
+
+    if (mode === "normal") {
+      tabNormal.classList.add("active");
+      tabTranslate.classList.remove("active");
+      normalLangGroup.classList.remove("hidden");
+      translateGroup.classList.add("hidden");
+    } else {
+      tabTranslate.classList.add("active");
+      tabNormal.classList.remove("active");
+      normalLangGroup.classList.add("hidden");
+      translateGroup.classList.remove("hidden");
+
+      if (mode === "bn_to_en") {
+        btnBnToEn.classList.add("active");
+        btnEnToBn.classList.remove("active");
+      } else {
+        btnEnToBn.classList.add("active");
+        btnBnToEn.classList.remove("active");
+      }
     }
 
     if (lang === "bn-BD") {
@@ -94,60 +133,89 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const syncState = () => {
-    const fallbackLang = localStorage.getItem("uvt_lang") || "bn-BD";
-    const fallbackMode = localStorage.getItem("uvt_mode") || "normal";
-    updateUI(false, fallbackLang, fallbackMode);
-
-    safeSendMessage({ action: "getStatus" }, (response) => {
-      if (response) {
-        updateUI(response.isRecording, response.currentLang, response.currentMode);
-      }
+    getGlobalSettings((items) => {
+      updateUI(false, items.uvt_lang, items.uvt_mode, items.uvt_floating_btn);
+      safeSendMessage({ action: "getStatus" }, (response) => {
+        if (response) {
+          updateUI(
+            response.isRecording,
+            response.currentLang || items.uvt_lang,
+            response.currentMode || items.uvt_mode,
+            response.floatingBtnEnabled !== undefined ? response.floatingBtnEnabled : items.uvt_floating_btn
+          );
+        }
+      });
     });
   };
 
-  const setMode = (mode) => {
-    localStorage.setItem("uvt_mode", mode);
-    updateUI(false, null, mode);
+  const applyMode = (mode) => {
+    const updateData = { uvt_mode: mode };
+    if (mode !== "normal") {
+      updateData.uvt_last_trans = mode;
+    }
+    saveGlobalSettings(updateData, () => {
+      getGlobalSettings((items) => {
+        updateUI(false, items.uvt_lang, items.uvt_mode, items.uvt_floating_btn);
+      });
+    });
     safeSendMessage({ action: "setMode", mode }, (response) => {
       if (response) {
-        updateUI(response.isRecording, response.currentLang, response.currentMode);
+        updateUI(response.isRecording, response.currentLang, response.currentMode, response.floatingBtnEnabled);
       }
     });
   };
 
-  modeNormal.addEventListener("click", () => setMode("normal"));
-  modeBnToEn.addEventListener("click", () => setMode("bn_to_en"));
-  modeEnToBn.addEventListener("click", () => setMode("en_to_bn"));
-
-  btnBangla.addEventListener("click", () => {
-    localStorage.setItem("uvt_lang", "bn-BD");
-    localStorage.setItem("uvt_mode", "normal");
-    updateUI(false, "bn-BD", "normal");
-    safeSendMessage({ action: "setLanguage", lang: "bn-BD" }, (response) => {
+  const applyLanguage = (lang) => {
+    saveGlobalSettings({ uvt_lang: lang, uvt_mode: "normal" }, () => {
+      getGlobalSettings((items) => {
+        updateUI(false, items.uvt_lang, items.uvt_mode, items.uvt_floating_btn);
+      });
+    });
+    safeSendMessage({ action: "setLanguage", lang }, (response) => {
       if (response) {
-        updateUI(response.isRecording, response.currentLang, response.currentMode);
+        updateUI(response.isRecording, response.currentLang, response.currentMode, response.floatingBtnEnabled);
       }
+    });
+  };
+
+  tabNormal.addEventListener("click", () => applyMode("normal"));
+
+  tabTranslate.addEventListener("click", () => {
+    getGlobalSettings((items) => {
+      const targetTrans = items.uvt_last_trans || "bn_to_en";
+      applyMode(targetTrans);
     });
   });
 
-  btnEnglish.addEventListener("click", () => {
-    localStorage.setItem("uvt_lang", "en-US");
-    localStorage.setItem("uvt_mode", "normal");
-    updateUI(false, "en-US", "normal");
-    safeSendMessage({ action: "setLanguage", lang: "en-US" }, (response) => {
-      if (response) {
-        updateUI(response.isRecording, response.currentLang, response.currentMode);
-      }
+  btnBangla.addEventListener("click", () => applyLanguage("bn-BD"));
+  btnEnglish.addEventListener("click", () => applyLanguage("en-US"));
+
+  btnBnToEn.addEventListener("click", () => applyMode("bn_to_en"));
+  btnEnToBn.addEventListener("click", () => applyMode("en_to_bn"));
+
+  if (toggleFloatingBtn) {
+    toggleFloatingBtn.addEventListener("change", () => {
+      const isEnabled = toggleFloatingBtn.checked;
+      saveGlobalSettings({ uvt_floating_btn: isEnabled });
+      safeSendMessage({ action: "setFloatingBtn", enabled: isEnabled });
     });
-  });
+  }
 
   mainMicBtn.addEventListener("click", () => {
     safeSendMessage({ action: "toggleRecording" }, (response) => {
       if (response) {
-        updateUI(response.isRecording, response.currentLang, response.currentMode);
+        updateUI(response.isRecording, response.currentLang, response.currentMode, response.floatingBtnEnabled);
       }
     });
   });
+
+  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener(() => {
+      getGlobalSettings((items) => {
+        updateUI(false, items.uvt_lang, items.uvt_mode, items.uvt_floating_btn);
+      });
+    });
+  }
 
   syncState();
 });
